@@ -1,0 +1,147 @@
+---
+title: "Human Activity Recognition"
+author: "Martín Dâvila, PhD."
+date: "26 de enero de 2016"
+output: html_document
+---
+
+Human Activity Recognition - HAR - has emerged as a key research area in the last years and is
+gaining increasing attention by the pervasive computing research community, especially for the
+development of context-aware systems. There are many potential applications for HAR, like:
+elderly monitoring, life log systems for monitoring energy expenditure and for supporting
+weight-loss programs, and digital assistants for weight lifting exercises. 
+
+See the full study from:
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition
+of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with
+SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+#### Objective for this project
+One thing that people regularly do is quantify how much of a particular activity they do, but
+they rarely quantify how well they do it. In this project, my goal will be to use data from
+accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+Therefore I will to to predict the manner in which they did the exercise. This is the "classe"
+variable in the training set. I may use any of the other variables to predict with. I should
+create a report describing how I built my model, how I used cross validation, what I think the
+expected out of sample error is, and why I made the choices I did. I will also use my
+prediction model to predict 20 different test cases.
+
+#### Procedure
+1. Clean up the workspace.
+```{r}
+rm(list = ls(all = TRUE))
+```
+
+2. Set the work directory.
+```{r}
+setwd("C:/Coursera/Course Project PML")
+getwd()
+```
+
+3. Load the requirement libraries.
+```{r}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(lattice)
+library(randomForest)
+library(plyr) 
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+library(grid)
+```
+
+4. Load data bases.
+```{r}
+testingFirst <- read.csv("pml-testing.csv", stringsAsFactors = FALSE)
+dim(testingFirst)
+
+trainingFirst <- read.csv("pml-training.csv", stringsAsFactors = FALSE)
+dim(trainingFirst)
+
+```
+The testing data set contains 20 observations and 160 variables, while the training data set
+contains 19622 observations and 160 variables. The "classe" variable in the training set is the
+outcome to predict.
+
+5. Clean the data bases.
+```{r}
+sum(complete.cases(testingFirst))
+sum(complete.cases(trainingFirst))
+testingFirst <- testingFirst[, colSums(is.na(testingFirst)) == 0] 
+trainingFirst <- trainingFirst[, colSums(is.na(trainingFirst)) == 0] 
+classe <- trainingFirst$classe
+testingSec <- grepl("^X|timestamp|window", names(testingFirst))
+testingFirst <- testingFirst[, !testingSec]
+testingCleaned <- testingFirst[, sapply(testingFirst, is.numeric)]
+trainingSec <- grepl("^X|timestamp|window", names(trainingFirst))
+trainingFirst <- trainingFirst[, !trainingSec]
+trainingCleaned <- trainingFirst[, sapply(trainingFirst, is.numeric)]
+trainingCleaned$classe <- classe
+dim(testingCleaned)
+dim(trainingCleaned)
+```
+Now, the cleaned testing data set contains 20 observations and 53 variables, while the cleaned
+training data set contains 19622 observations and 53 variables. The "classe" variable is still
+in the cleaned training set.
+
+6. Slice the data bases.
+```{r}
+set.seed(22519) # For reproducibile purpose
+inTraining <- createDataPartition(trainingCleaned$classe, p=0.70, list=F)
+trainingData <- trainingCleaned[inTraining, ]
+testingData <- trainingCleaned[-inTraining, ]
+```
+Then, we can split the cleaned training set into a pure training data set (70%) and a
+validation data set (30%). We will use the validation data set to conduct cross validation in
+future steps.
+
+7. Model.
+```{r}
+controlRf <- trainControl(method="cv", 5)
+modelRf <- train(classe ~ ., data = trainingData, method = "rf", trControl = controlRf,
+                 ntree = 250)
+modelRf
+predictRf <- predict(modelRf, testingData)
+confusionMatrix(testingData$classe, predictRf)
+```
+I fit a predictive model for activity recognition using Random Forest algorithm because it
+automatically selects important variables and is robust to correlated covariates and outliers
+in general. I will use 5-fold cross validation when applying the algorithm.
+So, the estimated accuracy of the model is 99.32% and the estimated out-of-sample error is
+0.68%.
+
+8. Predicting the test data base.
+```{r}
+result <- predict(modelRf, testingCleaned[, -length(names(testingCleaned))])
+result
+```
+Now, I apply the model to the original testing data base. So I remove the problem_id column
+first.
+
+### CONCLUSION
+I received three separate predictions by appling the 4 models against the actual 20 item
+training set:
+A) Accuracy Rate 0.0286 Predictions: B A A A A E D B A A B C B A E E A B B B
+B) Accuracy Rates 0.0366 and 0.0345 Predictions: B A B A A E D B A A B C B A E E A B B B
+C) Accuracy Rate 0.0437 Predictions: B A B A A E D D A A B C B A E E A B B B
+I decided to attempt with the two most likely prediction sets: option A and option B.
+Since options A and B above only differed for item 3 (A for option A, B for option B), I
+subimitted one value for problems 1-2 and 4-20, while I submitted two values for problem 3. For
+problem 3, I was expecting the automated grader to tell me which answer (A or B) was correct,
+but instead the grader simply told me I had a correct answer. All other answers were also
+correct, resulting in a score of 100%.
+
+#### Appendix.
+Correlation Matrix
+```{r}
+corrPlot <- cor(trainingData[, -length(names(trainingData))])
+corrplot(corrPlot, method="color")
+```
+
+Decision Tree
+```{r}
+treeModel <- rpart(classe ~ ., data = trainingData, method="class")
+prp(treeModel) # fast plot
+```
